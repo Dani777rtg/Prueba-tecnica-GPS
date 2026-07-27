@@ -120,8 +120,11 @@ $env:API_URL="https://TU-API.onrender.com"; npm run simulator
 
 ### URLs de producción
 
-- API: _pendiente tras deploy_  
-- Frontend: _pendiente tras deploy_  
+- API: https://fleet-gps-api.onrender.com  
+- Frontend: https://fleet-gps-web.onrender.com  
+- Health: https://fleet-gps-api.onrender.com/health  
+
+Login demo: `admin@fleet.local` / `FleetAdmin123!` (o el `ADMIN_PASSWORD` configurado en Render).
 
 ## Video de sustentación
 
