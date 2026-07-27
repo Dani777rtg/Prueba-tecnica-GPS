@@ -165,6 +165,22 @@ Cursor (agente Composer) como copiloto para scaffolding, estructura del monorepo
 
 Un detalle típico: rutas de `dotenv` / `import.meta.url` en Windows (`pathname` con `/C:/...`) rompían la carga de `.env` en el simulador. Se corrigió usando `fileURLToPath` + `path.join`. También se revisó a mano la prioridad de estados (Sin señal > Detenido > En movimiento) y los iconos por defecto de Leaflet bajo Vite, que suelen romperse sin el fix de `L.Icon.Default`.
 
+## Seguridad del backend (qué se protege y por qué)
+
+No hay autenticación (fuera del alcance del enunciado). Sí hay controles prácticos de API:
+
+| Medida | Detalle |
+|--------|---------|
+| **DTOs estrictos** | `parseGpsIngestDto` solo acepta `vehicle_id`, `lat`, `lng`, `timestamp`; rechaza campos extra |
+| **Validación de params** | `/vehicles/:id` valida formato seguro del id antes de tocar la DB |
+| **SQL parametrizado** | Consultas con `$1…$n` vía `pg` (sin concatenar strings) |
+| **Helmet** | Headers HTTP de seguridad |
+| **Rate limit** | Máx. 120 req/min en `POST /gps` |
+| **Límite de body** | JSON máx. 100kb; errores 413/400 sin filtrar stack traces |
+| **CORS** | Configurable con `CORS_ORIGIN` |
+
+Los controllers usan `req.dto` / `req.vehicleId` después del middleware; no confían en el body crudo.
+
 ## Decisiones técnicas adicionales
 
 - **Mapa con datos reales** del API (no mock).  
