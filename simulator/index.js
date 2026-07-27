@@ -10,7 +10,6 @@ dotenv.config();
 const API_URL = (process.env.API_URL || 'http://localhost:3001').replace(/\/$/, '');
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@fleet.local';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'FleetAdmin123!';
-const ERROR_RATE = 0.1;
 
 const BOUNDS = {
   latMin: 4.6,
@@ -39,7 +38,7 @@ function nextIntervalMs() {
   return 3000 + Math.floor(Math.random() * 2001);
 }
 
-function buildValidPayload(vehicle) {
+function buildPayload(vehicle) {
   if (vehicle.mode === 'moving') {
     vehicle.lat = clamp(vehicle.lat + randomIn(-0.0015, 0.0015), BOUNDS.latMin, BOUNDS.latMax);
     vehicle.lng = clamp(vehicle.lng + randomIn(-0.0015, 0.0015), BOUNDS.lngMin, BOUNDS.lngMax);
@@ -50,27 +49,6 @@ function buildValidPayload(vehicle) {
     lat: Number(vehicle.lat.toFixed(6)),
     lng: Number(vehicle.lng.toFixed(6)),
     timestamp: new Date().toISOString(),
-  };
-}
-
-function buildInvalidPayload(vehicle) {
-  const kind = Math.floor(Math.random() * 3);
-  if (kind === 0) {
-    return { vehicle_id: vehicle.id, lat: 4.71, lng: -74.07 };
-  }
-  if (kind === 1) {
-    return {
-      vehicle_id: vehicle.id,
-      lat: 120,
-      lng: -74.07,
-      timestamp: new Date().toISOString(),
-    };
-  }
-  return {
-    vehicle_id: vehicle.id,
-    lat: 4.71,
-    lng: -74.07,
-    timestamp: 'fecha-invalida',
   };
 }
 
@@ -91,8 +69,7 @@ async function login() {
 }
 
 async function sendOnce(vehicle) {
-  const injectError = Math.random() < ERROR_RATE;
-  const payload = injectError ? buildInvalidPayload(vehicle) : buildValidPayload(vehicle);
+  const payload = buildPayload(vehicle);
 
   try {
     const response = await fetch(`${API_URL}/gps`, {
@@ -111,9 +88,8 @@ async function sendOnce(vehicle) {
     }
 
     const bodyText = await response.text();
-    const tag = injectError ? 'INVALID' : 'OK';
     console.log(
-      `[${tag}] ${vehicle.id} (${vehicle.label}) → ${response.status} ${bodyText.slice(0, 120)}`,
+      `[OK] ${vehicle.id} (${vehicle.label}) → ${response.status} ${bodyText.slice(0, 120)}`,
     );
   } catch (error) {
     console.error(`[ERROR] ${vehicle.id} no pudo conectar a ${API_URL}:`, error.message);
@@ -131,7 +107,7 @@ function schedule(vehicle) {
 async function main() {
   console.log(`Simulator → ${API_URL}`);
   console.log(`Vehículos: ${vehicles.map((v) => `${v.id} (${v.label})`).join(', ')}`);
-  console.log(`~${ERROR_RATE * 100}% de requests inválidos intencionales`);
+  console.log('Solo payloads válidos (errores de validación: colección Postman)');
 
   await login();
   console.log('Ctrl+C para detener\n');

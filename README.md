@@ -73,9 +73,9 @@ Evaluada con el `timestamp` del payload (no con la hora de recepción del servid
 ### Simulador
 
 - 3 vehículos (`VH-001`, `VH-002` en movimiento; `VH-003` estático)  
-- Envío cada 3–5 s  
-- ~10% de requests inválidos a propósito  
-- Variable `API_URL` (local o Render)
+- Envío cada 3–5 s (solo payloads válidos)  
+- Variable `API_URL` (local o Render)  
+- Los casos de error/validación se demuestran con la colección Postman: [`postman/Fleet-GPS-Telemetry.postman_collection.json`](postman/Fleet-GPS-Telemetry.postman_collection.json)
 
 ## Despliegue en Render
 
@@ -150,6 +150,17 @@ Si existiera un caché (Redis) y una base persistente, al eliminar un vehículo 
 
 En este prototipo no hay Redis: el DELETE borra el vehículo y, por `ON DELETE CASCADE`, todos sus `gps_points` en la misma operación de base de datos.
 
+## Colección Postman (errores y casos felices)
+
+Archivo: [`postman/Fleet-GPS-Telemetry.postman_collection.json`](postman/Fleet-GPS-Telemetry.postman_collection.json)
+
+1. Postman → **Import** → selecciona ese JSON  
+2. Ajusta `baseUrl` (`http://localhost:3001` o `https://fleet-gps-api.onrender.com`)  
+3. Corre primero **Auth → Login** (guarda el JWT solo)  
+4. Ejecuta las carpetas de errores: verás 400 / 401 / 404 con mensajes descriptivos  
+
+Cubre: campos faltantes, rangos lat/lng, timestamp inválido, DTO estricto, JSON malformado, sin token, vehículo inexistente, etc.
+
 ## Tests y Docker
 
 ```bash
@@ -172,8 +183,9 @@ Cursor (agente Composer) como copiloto para scaffolding, estructura del monorepo
 - Armar la estructura Express + Postgres + React de forma ordenada  
 - Implementar validaciones HTTP y la máquina de estados de telemetría  
 - Integrar SSE con fallback a polling  
-- Generar el simulador con inyección de errores ~10%  
+- Generar el simulador de telemetría  
 - Redactar documentación y checklist de deploy en Render  
+- Armar la colección Postman de casos de error  
 
 ### 03 — ¿Qué error de la IA encontraste y cómo lo corregiste?
 
