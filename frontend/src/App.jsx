@@ -1,10 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import VehicleList from './components/VehicleList.jsx';
 import VehicleMap from './components/VehicleMap.jsx';
 import LastUpdate from './components/LastUpdate.jsx';
 import LoginForm from './components/LoginForm.jsx';
 import { useVehicles } from './hooks/useVehicles.js';
-import { clearToken, getApiUrl, getToken } from './api.js';
+import {
+  clearToken,
+  fetchMe,
+  getApiUrl,
+  getToken,
+  onUnauthorized,
+} from './api.js';
 
 function Dashboard({ onLogout }) {
   const { vehicles, lastUpdatedAt, connectionMode, error } = useVehicles();
@@ -72,12 +78,54 @@ function Dashboard({ onLogout }) {
 }
 
 export default function App() {
-  const [authed, setAuthed] = useState(() => Boolean(getToken()));
+  const [authed, setAuthed] = useState(false);
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const unsub = onUnauthorized(() => {
+      setAuthed(false);
+    });
+
+    async function boot() {
+      if (!getToken()) {
+        if (!cancelled) {
+          setAuthed(false);
+          setChecking(false);
+        }
+        return;
+      }
+
+      try {
+        const me = await fetchMe();
+        if (!cancelled) setAuthed(Boolean(me));
+      } catch {
+        if (!cancelled) setAuthed(false);
+      } finally {
+        if (!cancelled) setChecking(false);
+      }
+    }
+
+    boot();
+    return () => {
+      cancelled = true;
+      unsub();
+    };
+  }, []);
 
   const handleLogout = () => {
     clearToken();
     setAuthed(false);
   };
+
+  if (checking) {
+    return (
+      <div className="login-page">
+        <p className="subtitle">Validando sesión…</p>
+      </div>
+    );
+  }
 
   if (!authed) {
     return <LoginForm onSuccess={() => setAuthed(true)} />;
