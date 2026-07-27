@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { fetchVehicles, getToken, subscribeVehicles } from '../api.js';
+import { fetchVehicles, subscribeVehicles } from '../api/vehiclesApi.js';
+import { getToken } from '../auth/tokenStorage.js';
 
 const POLL_MS = 5000;
 
@@ -25,8 +26,7 @@ export function useVehicles() {
   }, []);
 
   const startPolling = useCallback(() => {
-    if (pollRef.current) return;
-    if (!getToken()) return;
+    if (pollRef.current || !getToken()) return;
 
     const tick = async () => {
       try {
@@ -35,7 +35,7 @@ export function useVehicles() {
         setConnectionMode('polling');
       } catch (err) {
         setError(err.message);
-        if (String(err.message).includes('Sesión expirada')) {
+        if (err.status === 401 || String(err.message).includes('Sesión expirada')) {
           stopPolling();
         }
       }
@@ -58,16 +58,12 @@ export function useVehicles() {
       },
       () => {
         if (cancelled) return;
-        if (!pollRef.current && getToken()) {
-          startPolling();
-        }
+        if (!pollRef.current && getToken()) startPolling();
       },
     );
 
     const fallbackTimer = setTimeout(() => {
-      if (!cancelled && !gotSseRef.current && getToken()) {
-        startPolling();
-      }
+      if (!cancelled && !gotSseRef.current && getToken()) startPolling();
     }, 2500);
 
     return () => {

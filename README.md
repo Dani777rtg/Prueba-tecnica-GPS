@@ -176,7 +176,24 @@ Cursor (agente Composer) como copiloto para scaffolding, estructura del monorepo
 
 Un detalle típico: rutas de `dotenv` / `import.meta.url` en Windows (`pathname` con `/C:/...`) rompían la carga de `.env` en el simulador. Se corrigió usando `fileURLToPath` + `path.join`. También se revisó a mano la prioridad de estados (Sin señal > Detenido > En movimiento) y los iconos por defecto de Leaflet bajo Vite, que suelen romperse sin el fix de `L.Icon.Default`.
 
-## Seguridad del backend (qué se protege y por qué)
+## Frontend — estructura y buenas prácticas
+
+```
+frontend/src
+  api/           # client HTTP + authApi + vehiclesApi
+  auth/          # AuthContext, ProtectedRoute, token storage
+  pages/         # LoginPage, DashboardPage, NotFoundPage
+  components/    # UI reutilizable
+  hooks/         # useVehicles (SSE + polling)
+  config/        # env centralizado
+```
+
+- **React Router**: `/login`, `/` (protegida), `*` 404  
+- **AuthContext**: sesión JWT, bootstrap con `/auth/me`  
+- **Rutas protegidas / públicas**: redirect automático  
+- **Rewrite SPA** en Render (`/* → /index.html`) para deep links  
+- **ErrorBoundary** para no dejar la UI en blanco  
+
 
 | Medida | Detalle |
 |--------|---------|

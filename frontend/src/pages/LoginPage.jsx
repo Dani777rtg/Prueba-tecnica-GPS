@@ -1,7 +1,13 @@
 import { useState } from 'react';
-import { login } from '../api.js';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../auth/AuthContext.jsx';
 
-export default function LoginForm({ onSuccess }) {
+export default function LoginPage() {
+  const { login } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const redirectTo = location.state?.from?.pathname || '/';
+
   const [email, setEmail] = useState('admin@fleet.local');
   const [password, setPassword] = useState('FleetAdmin123!');
   const [error, setError] = useState(null);
@@ -13,7 +19,7 @@ export default function LoginForm({ onSuccess }) {
     setError(null);
     try {
       await login(email.trim(), password);
-      onSuccess?.();
+      navigate(redirectTo, { replace: true });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -23,14 +29,16 @@ export default function LoginForm({ onSuccess }) {
 
   return (
     <div className="login-page">
-      <form className="login-card" onSubmit={handleSubmit}>
+      <form className="login-card" onSubmit={handleSubmit} noValidate>
         <p className="eyebrow">Fleet Telemetry</p>
         <h1>Iniciar sesión</h1>
         <p className="subtitle">Acceso JWT al panel de monitoreo</p>
 
-        <label className="field">
+        <label className="field" htmlFor="email">
           <span>Email</span>
           <input
+            id="email"
+            name="email"
             type="email"
             autoComplete="username"
             value={email}
@@ -39,9 +47,11 @@ export default function LoginForm({ onSuccess }) {
           />
         </label>
 
-        <label className="field">
+        <label className="field" htmlFor="password">
           <span>Password</span>
           <input
+            id="password"
+            name="password"
             type="password"
             autoComplete="current-password"
             value={password}
@@ -51,7 +61,11 @@ export default function LoginForm({ onSuccess }) {
           />
         </label>
 
-        {error && <div className="banner-error">{error}</div>}
+        {error && (
+          <div className="banner-error" role="alert">
+            {error}
+          </div>
+        )}
 
         <button type="submit" className="btn-primary" disabled={loading}>
           {loading ? 'Entrando…' : 'Entrar'}

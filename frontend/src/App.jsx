@@ -1,135 +1,35 @@
-import { useEffect, useState } from 'react';
-import VehicleList from './components/VehicleList.jsx';
-import VehicleMap from './components/VehicleMap.jsx';
-import LastUpdate from './components/LastUpdate.jsx';
-import LoginForm from './components/LoginForm.jsx';
-import { useVehicles } from './hooks/useVehicles.js';
-import {
-  clearToken,
-  fetchMe,
-  getApiUrl,
-  getToken,
-  onUnauthorized,
-} from './api.js';
-
-function Dashboard({ onLogout }) {
-  const { vehicles, lastUpdatedAt, connectionMode, error } = useVehicles();
-
-  const counts = vehicles.reduce(
-    (acc, v) => {
-      acc.total += 1;
-      if (v.status === 'En movimiento') acc.moving += 1;
-      else if (v.status === 'Detenido') acc.stopped += 1;
-      else acc.nosignal += 1;
-      return acc;
-    },
-    { total: 0, moving: 0, stopped: 0, nosignal: 0 },
-  );
-
-  return (
-    <div className="app">
-      <header className="header">
-        <div>
-          <p className="eyebrow">Fleet Telemetry</p>
-          <h1>Monitoreo de Flotas GPS</h1>
-          <p className="subtitle">Panel en tiempo real · API {getApiUrl()}</p>
-        </div>
-        <div className="header-actions">
-          <LastUpdate lastUpdatedAt={lastUpdatedAt} connectionMode={connectionMode} />
-          <button type="button" className="btn-secondary" onClick={onLogout}>
-            Cerrar sesión
-          </button>
-        </div>
-      </header>
-
-      {error && <div className="banner-error">Error de conexión: {error}</div>}
-
-      <section className="stats" aria-label="Resumen">
-        <div className="stat">
-          <span className="stat__value">{counts.total}</span>
-          <span className="stat__label">Vehículos</span>
-        </div>
-        <div className="stat">
-          <span className="stat__value status-text--moving">{counts.moving}</span>
-          <span className="stat__label">En movimiento</span>
-        </div>
-        <div className="stat">
-          <span className="stat__value status-text--stopped">{counts.stopped}</span>
-          <span className="stat__label">Detenidos</span>
-        </div>
-        <div className="stat">
-          <span className="stat__value status-text--nosignal">{counts.nosignal}</span>
-          <span className="stat__label">Sin señal</span>
-        </div>
-      </section>
-
-      <main className="layout">
-        <section className="panel">
-          <h2>Vehículos</h2>
-          <VehicleList vehicles={vehicles} />
-        </section>
-        <section className="panel panel--map">
-          <h2>Mapa</h2>
-          <VehicleMap vehicles={vehicles} />
-        </section>
-      </main>
-    </div>
-  );
-}
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { AuthProvider } from './auth/AuthContext.jsx';
+import { ProtectedRoute, PublicOnlyRoute } from './auth/ProtectedRoute.jsx';
+import LoginPage from './pages/LoginPage.jsx';
+import DashboardPage from './pages/DashboardPage.jsx';
+import NotFoundPage from './pages/NotFoundPage.jsx';
 
 export default function App() {
-  const [authed, setAuthed] = useState(false);
-  const [checking, setChecking] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const unsub = onUnauthorized(() => {
-      setAuthed(false);
-    });
-
-    async function boot() {
-      if (!getToken()) {
-        if (!cancelled) {
-          setAuthed(false);
-          setChecking(false);
-        }
-        return;
-      }
-
-      try {
-        const me = await fetchMe();
-        if (!cancelled) setAuthed(Boolean(me));
-      } catch {
-        if (!cancelled) setAuthed(false);
-      } finally {
-        if (!cancelled) setChecking(false);
-      }
-    }
-
-    boot();
-    return () => {
-      cancelled = true;
-      unsub();
-    };
-  }, []);
-
-  const handleLogout = () => {
-    clearToken();
-    setAuthed(false);
-  };
-
-  if (checking) {
-    return (
-      <div className="login-page">
-        <p className="subtitle">Validando sesión…</p>
-      </div>
-    );
-  }
-
-  if (!authed) {
-    return <LoginForm onSuccess={() => setAuthed(true)} />;
-  }
-
-  return <Dashboard onLogout={handleLogout} />;
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <Routes>
+          <Route
+            path="/login"
+            element={
+              <PublicOnlyRoute>
+                <LoginPage />
+              </PublicOnlyRoute>
+            }
+          />
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/dashboard" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
+  );
 }

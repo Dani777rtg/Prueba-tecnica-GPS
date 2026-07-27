@@ -1,5 +1,5 @@
 import StatusBadge from './StatusBadge.jsx';
-import { deleteVehicle } from '../api.js';
+import { deleteVehicle } from '../api/vehiclesApi.js';
 
 function formatTime(iso) {
   if (!iso) return '—';
