@@ -1,6 +1,15 @@
 import { pool } from './db.js';
+import { ensureAdminUser } from './services/authService.js';
 
 const SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS users (
+  id SERIAL PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'admin',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS vehicles (
   id TEXT PRIMARY KEY,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -22,6 +31,7 @@ CREATE INDEX IF NOT EXISTS idx_gps_points_vehicle_recorded
 async function migrate() {
   try {
     await pool.query(SCHEMA_SQL);
+    await ensureAdminUser();
     console.log('Migration completed successfully');
   } catch (error) {
     console.error('Migration failed:', error.message);

@@ -45,14 +45,22 @@ React SPA ──GET /vehicles─────┤
 
 ### Endpoints
 
-| Método | Ruta | Descripción |
-|--------|------|-------------|
-| POST | `/gps` | Ingesta de coordenada (201 / 400) |
-| GET | `/vehicles` | Estado actual de todos los vehículos |
-| GET | `/vehicles/:id` | Un vehículo (404 si no existe) |
-| DELETE | `/vehicles/:id` | Elimina vehículo y sus puntos (cascada) |
-| GET | `/events` | Stream SSE con snapshots de vehículos |
-| GET | `/health` | Healthcheck |
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| POST | `/auth/login` | No | Obtiene JWT (rate limit anti-brute-force) |
+| GET | `/auth/me` | Bearer | Usuario del token |
+| POST | `/gps` | Bearer | Ingesta de coordenada (201 / 400) |
+| GET | `/vehicles` | Bearer | Estado actual de todos los vehículos |
+| GET | `/vehicles/:id` | Bearer | Un vehículo (404 si no existe) |
+| DELETE | `/vehicles/:id` | Bearer | Elimina vehículo y sus puntos (cascada) |
+| GET | `/events` | Bearer o `?token=` | Stream SSE (EventSource no soporta headers) |
+| GET | `/health` | No | Healthcheck (+ estado DB) |
+
+**Credenciales demo (seed automático):**
+- Email: `admin@fleet.local`
+- Password: `FleetAdmin123!`
+
+Cámbialas en producción con `ADMIN_EMAIL` / `ADMIN_PASSWORD` / `JWT_SECRET`.
 
 ### Lógica de estados
 
@@ -90,7 +98,10 @@ Incluye [`render.yaml`](render.yaml) como guía (Blueprint) o crea los servicios
      - `DATABASE_URL` = URL de Postgres (Render)
      - `DATABASE_SSL=true`
      - `CORS_ORIGIN` = `https://TU-FRONTEND.onrender.com`
+     - `JWT_SECRET` = string aleatorio ≥ 32 caracteres
+     - `ADMIN_EMAIL` / `ADMIN_PASSWORD` = credenciales del admin
      - `NODE_VERSION=20`
+     - `NODE_ENV=production`
 3. **Static Site** para el panel:
    - Root directory: `frontend`
    - Build: `npm install && npm run build`
@@ -167,19 +178,24 @@ Un detalle típico: rutas de `dotenv` / `import.meta.url` en Windows (`pathname`
 
 ## Seguridad del backend (qué se protege y por qué)
 
-No hay autenticación (fuera del alcance del enunciado). Sí hay controles prácticos de API:
-
 | Medida | Detalle |
 |--------|---------|
-| **DTOs estrictos** | `parseGpsIngestDto` solo acepta `vehicle_id`, `lat`, `lng`, `timestamp`; rechaza campos extra |
-| **Validación de params** | `/vehicles/:id` valida formato seguro del id antes de tocar la DB |
-| **SQL parametrizado** | Consultas con `$1…$n` vía `pg` (sin concatenar strings) |
-| **Helmet** | Headers HTTP de seguridad |
-| **Rate limit** | Máx. 120 req/min en `POST /gps` |
-| **Límite de body** | JSON máx. 100kb; errores 413/400 sin filtrar stack traces |
-| **CORS** | Configurable con `CORS_ORIGIN` |
+| **JWT (Bearer)** | Rutas de negocio protegidas; login con bcrypt (cost 12) |
+| **Seed admin** | Usuario admin creado en migrate/startup (sin passwords en claro en DB) |
+| **DTOs estrictos** | GPS + Login: allowlist de campos; rechaza extras |
+| **Validación de params** | `/vehicles/:id` valida formato seguro del id |
+| **SQL parametrizado** | Consultas con `$1…$n` vía `pg` |
+| **Helmet** | Headers HTTP de seguridad; `x-powered-by` desactivado |
+| **Rate limit** | Login 20/15min; `/gps` 120/min; API general 300/min |
+| **Límite de body** | JSON máx. 100kb; sin filtrar stack traces al cliente |
+| **CORS** | Configurable; headers `Authorization` permitidos |
+| **Config central** | `JWT_SECRET` obligatorio en production (≥32 chars) |
+| **Logs** | Morgan (sin spamear `/health`) |
+| **Graceful shutdown** | SIGTERM/SIGINT cierran HTTP + pool Postgres |
+| **Health** | Verifica conectividad a la DB (503 si cae) |
+| **SSE token** | `?token=` solo en `/events` (limitación de EventSource) |
 
-Los controllers usan `req.dto` / `req.vehicleId` después del middleware; no confían en el body crudo.
+Credenciales inválidas siempre responden el mismo mensaje (`Credenciales inválidas`) para no filtrar si el email existe.
 
 ## Decisiones técnicas adicionales
 

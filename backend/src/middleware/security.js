@@ -1,22 +1,27 @@
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import morgan from 'morgan';
+import { config } from '../config.js';
 
 /**
- * Security middleware stack for the Express app.
- * Keep this lean and explainable in the sustentación video.
+ * Security + observability middleware stack.
  */
 export function applySecurity(app) {
-  // Render / reverse proxies: needed so rate-limit sees the real client IP
   app.set('trust proxy', 1);
+  app.disable('x-powered-by');
 
   app.use(
     helmet({
-      // SPA on another origin (Render static) consumes this API
       crossOriginResourcePolicy: { policy: 'cross-origin' },
     }),
   );
 
-  // Protect ingest endpoint from abuse / accidental floods
+  app.use(
+    morgan(config.isProduction ? 'combined' : 'dev', {
+      skip: (req) => req.path === '/health',
+    }),
+  );
+
   const gpsLimiter = rateLimit({
     windowMs: 60 * 1000,
     max: 120,
@@ -26,4 +31,14 @@ export function applySecurity(app) {
   });
 
   app.use('/gps', gpsLimiter);
+
+  const apiLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 300,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Demasiadas solicitudes. Intenta de nuevo en un minuto.' },
+  });
+
+  app.use(apiLimiter);
 }

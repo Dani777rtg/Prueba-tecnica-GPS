@@ -1,10 +1,12 @@
+import { useState } from 'react';
 import VehicleList from './components/VehicleList.jsx';
 import VehicleMap from './components/VehicleMap.jsx';
 import LastUpdate from './components/LastUpdate.jsx';
+import LoginForm from './components/LoginForm.jsx';
 import { useVehicles } from './hooks/useVehicles.js';
-import { getApiUrl } from './api.js';
+import { clearToken, getApiUrl, getToken } from './api.js';
 
-export default function App() {
+function Dashboard({ onLogout }) {
   const { vehicles, lastUpdatedAt, connectionMode, error } = useVehicles();
 
   const counts = vehicles.reduce(
@@ -24,11 +26,14 @@ export default function App() {
         <div>
           <p className="eyebrow">Fleet Telemetry</p>
           <h1>Monitoreo de Flotas GPS</h1>
-          <p className="subtitle">
-            Panel en tiempo real · API {getApiUrl()}
-          </p>
+          <p className="subtitle">Panel en tiempo real · API {getApiUrl()}</p>
         </div>
-        <LastUpdate lastUpdatedAt={lastUpdatedAt} connectionMode={connectionMode} />
+        <div className="header-actions">
+          <LastUpdate lastUpdatedAt={lastUpdatedAt} connectionMode={connectionMode} />
+          <button type="button" className="btn-secondary" onClick={onLogout}>
+            Cerrar sesión
+          </button>
+        </div>
       </header>
 
       {error && <div className="banner-error">Error de conexión: {error}</div>}
@@ -64,4 +69,19 @@ export default function App() {
       </main>
     </div>
   );
+}
+
+export default function App() {
+  const [authed, setAuthed] = useState(() => Boolean(getToken()));
+
+  const handleLogout = () => {
+    clearToken();
+    setAuthed(false);
+  };
+
+  if (!authed) {
+    return <LoginForm onSuccess={() => setAuthed(true)} />;
+  }
+
+  return <Dashboard onLogout={handleLogout} />;
 }

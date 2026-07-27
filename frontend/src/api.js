@@ -1,11 +1,54 @@
 const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '');
+const TOKEN_KEY = 'fleet_gps_token';
 
 export function getApiUrl() {
   return API_URL;
 }
 
+export function getToken() {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+export function setToken(token) {
+  localStorage.setItem(TOKEN_KEY, token);
+}
+
+export function clearToken() {
+  localStorage.removeItem(TOKEN_KEY);
+}
+
+function authHeaders(extra = {}) {
+  const token = getToken();
+  return {
+    ...extra,
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
+export async function login(email, password) {
+  const response = await fetch(`${API_URL}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(body.error || `Login falló (${response.status})`);
+  }
+
+  setToken(body.access_token);
+  return body;
+}
+
 export async function fetchVehicles() {
-  const response = await fetch(`${API_URL}/vehicles`);
+  const response = await fetch(`${API_URL}/vehicles`, {
+    headers: authHeaders(),
+  });
+  if (response.status === 401) {
+    clearToken();
+    throw new Error('Sesión expirada. Inicia sesión de nuevo.');
+  }
   if (!response.ok) {
     throw new Error(`GET /vehicles falló (${response.status})`);
   }
@@ -15,7 +58,12 @@ export async function fetchVehicles() {
 export async function deleteVehicle(id) {
   const response = await fetch(`${API_URL}/vehicles/${encodeURIComponent(id)}`, {
     method: 'DELETE',
+    headers: authHeaders(),
   });
+  if (response.status === 401) {
+    clearToken();
+    throw new Error('Sesión expirada. Inicia sesión de nuevo.');
+  }
   if (response.status === 404) {
     throw new Error('Vehículo no encontrado');
   }
@@ -25,7 +73,15 @@ export async function deleteVehicle(id) {
 }
 
 export function subscribeVehicles(onData, onError) {
-  const source = new EventSource(`${API_URL}/events`);
+  const token = getToken();
+  if (!token) {
+    onError?.(new Error('Sin token'));
+    return () => {};
+  }
+
+  // EventSource cannot send Authorization headers → token in query string
+  const url = `${API_URL}/events?token=${encodeURIComponent(token)}`;
+  const source = new EventSource(url);
 
   source.addEventListener('vehicles', (event) => {
     try {
