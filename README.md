@@ -128,7 +128,7 @@ Login demo: `admin@fleet.local` / `FleetAdmin123!` (o el `ADMIN_PASSWORD` config
 
 ## Video de sustentación
 
-_Enlace YouTube (No listado): pendiente de grabación_
+Enlace YouTube (No listado): https://youtu.be/rQCc_Wuz5xU
 
 ### Guion sugerido (3–7 min)
 
