@@ -159,18 +159,7 @@ Archivo: [`postman/Fleet-GPS-Telemetry.postman_collection.json`](postman/Fleet-G
 3. Corre primero **Auth → Login** (guarda el JWT solo)  
 4. Ejecuta las carpetas de errores: verás 400 / 401 / 404 con mensajes descriptivos  
 
-Cubre: campos faltantes, rangos lat/lng, timestamp inválido, DTO estricto, JSON malformado, sin token, vehículo inexistente, etc.
-
-## Tests y Docker
-
-```bash
-npm test
-docker compose up -d
-```
-
-- Tests unitarios: validación GPS + estados.  
-- Docker Compose: Postgres 16 en puerto **5434**.  
-- `backend/Dockerfile` opcional para empaquetar la API.
+Cubre: campos faltantes, rangos lat/lng, timestamp inválido, DTO estricto, JSON malformado, sin token, vehículo inexistente, flujo crear→ver→borrar `VH-POSTMAN`, etc.
 
 ## Reporte de IA
 
@@ -209,28 +198,82 @@ frontend/src
 - **Rewrite SPA** en Render (`/* → /index.html`) para deep links  
 - **ErrorBoundary** para no dejar la UI en blanco  
 
+### Autenticación y guardado del token (frontend)
 
-| Medida | Detalle |
-|--------|---------|
-| **JWT (Bearer)** | Rutas de negocio protegidas; login con bcrypt (cost 12) |
-| **Seed admin** | Usuario admin creado en migrate/startup (sin passwords en claro en DB) |
-| **DTOs estrictos** | GPS + Login: allowlist de campos; rechaza extras |
-| **Validación de params** | `/vehicles/:id` valida formato seguro del id |
-| **SQL parametrizado** | Consultas con `$1…$n` vía `pg` |
-| **Helmet** | Headers HTTP de seguridad; `x-powered-by` desactivado |
-| **Rate limit** | Login 20/15min; `/gps` 120/min; API general 300/min |
-| **Límite de body** | JSON máx. 100kb; sin filtrar stack traces al cliente |
-| **CORS** | Configurable; headers `Authorization` permitidos |
-| **Config central** | `JWT_SECRET` obligatorio en production (≥32 chars) |
-| **Logs** | Morgan (sin spamear `/health`) |
-| **Graceful shutdown** | SIGTERM/SIGINT cierran HTTP + pool Postgres |
-| **Health** | Verifica conectividad a la DB (503 si cae) |
-| **SSE token** | `?token=` solo en `/events` (limitación de EventSource) |
+El panel no guarda la contraseña. Solo guarda el **access token JWT** tras un login exitoso.
 
-Credenciales inválidas siempre responden el mismo mensaje (`Credenciales inválidas`) para no filtrar si el email existe.
+| Pieza | Archivo | Qué hace |
+|-------|---------|----------|
+| Almacenamiento | `frontend/src/auth/tokenStorage.js` | Guarda / lee / borra el JWT en `localStorage` bajo la clave `fleet_gps_token`. Si la API responde **401**, limpia el token y dispara el evento `fleet:unauthorized`. |
+| Sesión global | `frontend/src/auth/AuthContext.jsx` | Al cargar la app, si hay token llama `GET /auth/me`. Expone `login`, `logout`, `user` e `isAuthenticated`. Escucha el evento de 401 para forzar logout en la UI. |
+| Rutas | `frontend/src/auth/ProtectedRoute.jsx` | Sin sesión → redirect a `/login`. Si ya hay sesión, `/login` redirige al dashboard. |
+| Cliente HTTP | `frontend/src/api/client.js` | En cada request autenticado agrega `Authorization: Bearer <token>`. Ante 401 limpia sesión. |
+| Login API | `frontend/src/api/authApi.js` | `POST /auth/login` → guarda `access_token` con `setToken`. |
+| SSE | `frontend/src/api/vehiclesApi.js` | `EventSource` no puede enviar headers; el token va en `GET /events?token=...` (el backend solo lo acepta en esa ruta). |
+
+Flujo resumido:
+
+1. Usuario inicia sesión en `/login`  
+2. Backend responde `{ access_token, user, ... }`  
+3. Front guarda el token en `localStorage`  
+4. Dashboard y polling/SSE usan ese token  
+5. “Cerrar sesión” o un **401** borran el token y vuelven al login  
+
+## Seguridad del backend
+
+Capas aplicadas en la API (además de la validación del enunciado):
+
+| Medida | Archivo(s) | Detalle |
+|--------|------------|---------|
+| **JWT (Bearer)** | `middleware/auth.js`, `services/authService.js`, `routes/auth.js` | Rutas de negocio (`/gps`, `/vehicles`, `/events`) exigen token. Login público. |
+| **bcrypt (cost 12)** | `services/authService.js` | La password del admin se guarda hasheada; nunca en texto plano. |
+| **Seed admin** | `migrate.js` / startup | Usuario admin creado automáticamente (`ADMIN_EMAIL` / `ADMIN_PASSWORD`). |
+| **DTOs estrictos** | `dto/gpsIngest.dto.js`, `dto/login.dto.js`, `dto/vehicleId.dto.js` | Allowlist de campos; rechazan extras, tipos incorrectos y rangos inválidos. |
+| **Middleware de validación** | `middleware/validate.js` | El controller usa `req.dto` / `req.vehicleId`, no el body crudo. |
+| **SQL parametrizado** | `services/vehicleService.js`, `authService.js`, `db.js` | Consultas con `$1…$n` vía `pg` (anti SQL injection). |
+| **Helmet** | `middleware/security.js` | Headers HTTP de seguridad; `x-powered-by` desactivado. |
+| **Rate limit** | `middleware/security.js`, `routes/auth.js` | Login 20/15 min; `/gps` 120/min; API general 300/min. |
+| **Límite de body** | `app.js` | JSON máx. 100kb; errores 413/400; **sin** filtrar stack traces al cliente. |
+| **CORS** | `app.js` | Configurable con `CORS_ORIGIN`; permite header `Authorization`. |
+| **Config central** | `config.js` | `JWT_SECRET` obligatorio en production (≥ 32 caracteres). |
+| **Logs** | `middleware/security.js` | Morgan (omite spam de `/health`). |
+| **Graceful shutdown** | `index.js` | SIGTERM/SIGINT cierran HTTP + pool Postgres. |
+| **Health** | `app.js` | Verifica DB (`ok` / `503 degraded`). |
+| **SSE token** | `middleware/auth.js`, `routes/events.js` | `?token=` **solo** en `/events` (limitación de EventSource). |
+| **DELETE en cascada** | `migrate.js` | Borrar vehículo elimina sus `gps_points` (`ON DELETE CASCADE`). |
+
+Credenciales inválidas siempre responden el mismo mensaje (`Credenciales inválidas`) para no revelar si el email existe.
+
+## Pruebas unitarias
+
+```bash
+npm test
+# o
+npm test --prefix backend
+```
+
+Son tests de **funciones puras** (no levantan el server HTTP ni necesitan UI). Ubicación: `backend/tests/`.
+
+| Archivo | Qué cubre |
+|---------|-----------|
+| `backend/tests/gpsValidator.test.js` | DTO de `POST /gps`: payload válido; `vehicle_id` vacío/inseguro; `lat`/`lng` fuera de rango; timestamp inválido o no ISO; campos extra rechazados. |
+| `backend/tests/loginDto.test.js` | DTO de login: email normalizado; password corta; email inválido; campos no permitidos. |
+| `backend/tests/statusService.test.js` | Lógica de estados: **Sin señal**, **Detenido**, **En movimiento**, historial vacío. |
+
+Así se garantiza el manejo de errores de validación y la máquina de estados del enunciado de forma automática.
+
+## Docker
+
+```bash
+docker compose up -d
+```
+
+- Docker Compose: Postgres 16 en puerto **5434**.  
+- `backend/Dockerfile` opcional para empaquetar la API.
 
 ## Decisiones técnicas adicionales
 
 - **Mapa con datos reales** del API (no mock).  
 - **Alta implícita** de vehículo en el primer `POST /gps`.  
-- Commits por feature recomendados al subir el repo.  
+- Commits por feature en el historial del repo.  
+- Errores HTTP de demo también en la colección Postman (simulador solo envía payloads válidos).  

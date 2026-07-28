@@ -1,14 +1,15 @@
 {
   "info": {
     "name": "Fleet GPS Telemetry API",
-    "description": "Colección para probar casos exitosos y TODOS los manejos de error del backend.\n\n1) Ejecuta primero Auth → Login (guarda el token automáticamente).\n2) Corre las carpetas de errores.\n\nVariables: baseUrl, adminEmail, adminPassword, accessToken.",
+    "description": "Colección para probar casos exitosos y manejos de error.\n\nOrden recomendado:\n1) Auth → Login\n2) Carpeta 4. Flujo VH-POSTMAN (crear → ver → borrar) en orden 1→5\n3) Carpetas de errores\n\nVariables: baseUrl, adminEmail, adminPassword, accessToken.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     { "key": "baseUrl", "value": "https://fleet-gps-api.onrender.com" },
     { "key": "adminEmail", "value": "admin@fleet.local" },
     { "key": "adminPassword", "value": "FleetAdmin123!" },
-    { "key": "accessToken", "value": "" }
+    { "key": "accessToken", "value": "" },
+    { "key": "nowIso", "value": "" }
   ],
   "item": [
     {
@@ -396,10 +397,70 @@
       ]
     },
     {
-      "name": "4. Vehicles",
+      "name": "4. Flujo VH-POSTMAN (crear → ver → borrar)",
       "item": [
         {
-          "name": "GET /vehicles — 200 OK",
+          "name": "1) POST /gps — crear VH-POSTMAN (201)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('nowIso', new Date().toISOString());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vehicle_id\": \"VH-POSTMAN\",\n  \"lat\": 4.711,\n  \"lng\": -74.0721,\n  \"timestamp\": \"{{nowIso}}\"\n}"
+            },
+            "url": "{{baseUrl}}/gps",
+            "description": "Crea el vehículo VH-POSTMAN con timestamp actual. Ejecuta este request ANTES del GET."
+          }
+        },
+        {
+          "name": "2) GET /vehicles/VH-POSTMAN — 200 OK",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.expect(json.vehicle_id).to.eql('VH-POSTMAN');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{baseUrl}}/vehicles/VH-POSTMAN",
+            "description": "Consulta el vehículo recién creado."
+          }
+        },
+        {
+          "name": "3) GET /vehicles — lista (debe incluir VH-POSTMAN)",
           "request": {
             "method": "GET",
             "header": [
@@ -408,22 +469,61 @@
             "url": "{{baseUrl}}/vehicles"
           }
         },
+        {
+          "name": "4) DELETE /vehicles/VH-POSTMAN — 204 OK",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{baseUrl}}/vehicles/VH-POSTMAN",
+            "description": "Elimina VH-POSTMAN."
+          }
+        },
+        {
+          "name": "5) GET /vehicles/VH-POSTMAN — 404 tras borrar",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{baseUrl}}/vehicles/VH-POSTMAN",
+            "description": "Confirma que ya no existe."
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Vehicles — otros errores",
+      "item": [
         {
           "name": "GET /vehicles — 401 sin token",
           "request": {
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/vehicles"
-          }
-        },
-        {
-          "name": "GET /vehicles/:id — 200 OK",
-          "request": {
-            "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
-            ],
-            "url": "{{baseUrl}}/vehicles/VH-POSTMAN"
           }
         },
         {
@@ -443,17 +543,7 @@
             "header": [
               { "key": "Authorization", "value": "Bearer {{accessToken}}" }
             ],
-            "url": "{{baseUrl}}/vehicles/../x"
-          }
-        },
-        {
-          "name": "DELETE /vehicles/:id — 204 OK",
-          "request": {
-            "method": "DELETE",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
-            ],
-            "url": "{{baseUrl}}/vehicles/VH-POSTMAN"
+            "url": "{{baseUrl}}/vehicles/bad id!"
           }
         },
         {
